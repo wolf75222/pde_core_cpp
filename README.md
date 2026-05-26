@@ -120,7 +120,7 @@ auto patches = pde_core::cluster_berger_rigoutsos(marks, nx, ny);
 ```
 
 Le détail du templating et de la dispatch `CellTraits` est dans
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#templating-sur-cell).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#5-templating-sur-cell).
 
 ## Build et tests
 

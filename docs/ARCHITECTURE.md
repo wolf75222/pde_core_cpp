@@ -128,7 +128,7 @@ Options :
 | `PDE_CORE_USE_OPENMP` | `OFF` | Définit `PDE_CORE_HAS_OPENMP`, lie OpenMP transitivement |
 
 Le define `PDE_CORE_USE_FLOAT` (à passer en `-D` côté compilateur) bascule
-`Real = float` au lieu de `double`, à appliquer cohéramment dans le
+`Real = float` au lieu de `double`, à appliquer cohéremment dans le
 solveur consommateur — non testé en CI pour l'instant.
 
 ## 4. Mécanisme d'intégration côté consommateur
@@ -181,7 +181,7 @@ sans rien changer. Côté `advection_cpp`, `ScalarField2D` est
 
 ## 5. Templating sur `Cell`
 
-Le pivot conceptuel de la libraire est `Field*D<Cell>`. Le choix de
+Le pivot conceptuel de la bibliothèque est `Field*D<Cell>`. Le choix de
 templer plutôt que d'avoir une classe abstraite virtuelle est dicté
 par trois considérations :
 
@@ -197,7 +197,7 @@ par trois considérations :
    ce qui rend `Field2D<ConservedState2D>(64, 64)` correctement
    zéro-initialisé sans que le consommateur déclare quoi que ce soit.
 
-Le trade-off : la libraire est header-only, donc chaque compilation
+Le trade-off : la bibliothèque est header-only, donc chaque compilation
 du consommateur paye le coût des templates. Pour 5 ou 10 instanciations
 de `Field2D<Cell>`, c'est négligeable (les types sont petits) ; pour
 des dizaines d'instanciations, on commencerait à voir le compile time
@@ -205,7 +205,7 @@ monter. C'est aujourd'hui sous le seuil.
 
 ## 6. Ce qui n'est pas dans `pde_core` et pourquoi
 
-Pour comprendre où s'arrête la libraire et pourquoi, voici les briques
+Pour comprendre où s'arrête la bibliothèque et pourquoi, voici les briques
 qui restent **dans chaque solveur consommateur** :
 
 | Brique | Pourquoi pas extraite ? |
@@ -225,7 +225,9 @@ révisable si une duplication non prévue apparaît dans un solveur futur.
 
 GitHub Actions ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) :
 matrice `ubuntu-latest` + `macos-latest`, configure avec
-`-DPDE_CORE_BUILD_TESTS=ON`, build header-only + 3 binaires de tests,
+`-DPDE_CORE_BUILD_TESTS=ON`, build header-only + 8 binaires de tests
+(field, mesh_block, mesh_hierarchy, bc, clustering, flux_register, regrid,
+ghost_fill),
 exécute `ctest --output-on-failure`. Toute régression sur les traits
 de cellule, l'indexation ghost, ou Berger-Rigoutsos est détectée à
 chaque push.
