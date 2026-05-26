@@ -66,7 +66,7 @@ références bibliographiques sont dans
 
 ## Écosystème
 
-`pde_core_cpp` est l'une de quatre bibliothèques C++20 qui forment l'écosystème de solveurs PDE de ce stage :
+`pde_core_cpp` est l'une de quatre bibliothèques C++20 qui forment un écosystème de solveurs PDE :
 
 | Repo | Rôle | Dépend de |
 |---|---|---|
