@@ -56,22 +56,39 @@ pde_core_cpp/
 │   ├── core/
 │   │   ├── types.hpp                           # Real, Index
 │   │   ├── openmp.hpp                          # PDE_OMP_* + helpers
-│   │   └── cell_traits.hpp                     # CellTraits<Cell>::zero() via SFINAE
+│   │   └── cell_traits.hpp                     # CellTraits<Cell>::zero() + accesseur composante + kahan_add
 │   ├── mesh/
 │   │   ├── domain1d.hpp                        # struct Domain1D
 │   │   ├── domain2d.hpp                        # struct Domain2D
 │   │   ├── field1d.hpp                         # template <Cell> class Field1D
 │   │   └── field2d.hpp                         # template <Cell> class Field2D
+│   ├── bc/
+│   │   ├── periodic.hpp                        # PeriodicBC1D, apply<Cell>
+│   │   ├── periodic_2d.hpp                     # PeriodicBC2D, corner pass
+│   │   ├── outflow.hpp                         # OutflowBC1D
+│   │   └── outflow_2d.hpp                      # OutflowBC2D
 │   └── amr/
 │       ├── box1d.hpp                           # struct Box1D
 │       ├── box2d.hpp                           # struct Box2D
 │       ├── mesh_block1d.hpp                    # template <Cell> class MeshBlock1D
 │       ├── mesh_block2d.hpp                    # template <Cell> class MeshBlock2D
+│       ├── mesh_hierarchy1d.hpp                # template <Cell> MeshHierarchy1D
+│       ├── mesh_hierarchy2d.hpp                # template <Cell> MeshHierarchy2D, multi-niveau + multi-patch
+│       ├── flux_register1d.hpp                 # template <Cell> FluxRegister1D, Kahan
+│       ├── flux_register2d.hpp                 # template <Cell> FluxRegister2D, weighted + per-thread
+│       ├── ghost_fill2d.hpp                    # fill_patch_ghosts_multipatch<Cell>
+│       ├── regrid1d.hpp                        # regrid_1d<Cell, Criterion>
+│       ├── regrid2d.hpp                        # regrid_2d / multilevel / multipatch
 │       └── clustering2d.hpp                    # Berger-Rigoutsos 1991
 └── tests/
     ├── CMakeLists.txt
     ├── test_field.cpp                          # Field<Real>, Field<FakeVecCell>, Domain
     ├── test_mesh_block.cpp                     # MeshBlock1D/2D + Box
+    ├── test_mesh_hierarchy.cpp                 # MeshHierarchy avec multi-niveau, refinement, clear
+    ├── test_bc.cpp                             # Periodic + Outflow sur Field<Real> et Field<FakeVec>
+    ├── test_flux_register.cpp                  # FluxRegister scalaire et vec, weighted, per-thread merge
+    ├── test_regrid.cpp                         # regrid_1d / 2d / multilevel / multipatch sur Real
+    ├── test_ghost_fill.cpp                     # single-patch parent + sibling override
     └── test_clustering.cpp                     # Berger-Rigoutsos cas canoniques
 ```
 
@@ -193,18 +210,16 @@ qui restent **dans chaque solveur consommateur** :
 
 | Brique | Pourquoi pas extraite ? |
 |---|---|
-| `MeshHierarchy{1d,2d}` | Stocke des `MeshBlock<Cell>` et expose des méthodes `block(L)` ; pleinement type-paramétré, mais sa logique multi-patch / multi-level est tellement entrelacée avec le step_subcycled de l'intégrateur AMR que l'extraire séparément multiplierait les points de couplage |
-| `FluxRegister{1d,2d}` | Le payload est un `Cell` ou un `Eigen::Vector` ; la logique de Kahan-compensated accumulation est identique mais le buffer interne change. Extraire demanderait un template sur Cell + un trait pour Kahan |
-| `regrid{1d,2d}` | Appelle clustering (extrait) puis manipule `MeshHierarchy<Cell>` (non extrait) ; suit la décision sur la hiérarchie |
-| `ghost_fill2d` | Dépend de `MeshHierarchy2D`, ne peut pas s'extraire avant elle |
-| `amr_integrator*` | Couple `MeshHierarchy`, `FluxRegister`, schéma de flux du consommateur ; refactor en politique de flux templée prendrait 1-2 semaines |
-| Intégrateurs temps (`ExplicitEuler`, `SSP_RK2`, `SSP_RK3`, `Strang_split_2d`) | Appellent `scheme.rhs(...)` ou `scheme.step(...)` dont les signatures diffèrent par solveur |
-| Conditions aux limites (`Periodic`, `Outflow`, `Dirichlet`, `NoSlipWall`, `Sommerfeld`) | Le mirror anti-symétrique de la vitesse pour `NoSlipWall` est intrinsèquement Euler-spécifique (recompute pressure, recompute energy) ; `Periodic` et `Outflow` sont communs mais petits |
-| Solveurs Riemann, reconstructions WENO/MUSCL, viscous flux, source plasma | Tous intrinsèquement Euler |
-| `cluster_berger_rigoutsos` | **Extrait** : pur algorithme sur `vector<bool>` |
+| `amr_integrator*` (et ses variantes SSPRK3, MUSCL+SSPRK3, WENO5+SSPRK3) | Couple `MeshHierarchy`, `FluxRegister` (les deux extraits), mais aussi le schéma de flux du consommateur dont la signature `flux_x(eq, U, i, j)` n'est pas uniforme. Un refactor en politique de flux templée est faisable mais représente 1-2 semaines de travail prudent |
+| Intégrateurs temps (`ExplicitEuler`, `SSP_RK2`, `SSP_RK3`, `Strang_split_2d`) | Appellent `scheme.rhs(...)` ou `scheme.step(...)` dont les signatures diffèrent par solveur. Extractibles avec un concept C++20 sur le schéma mais le gain (~200 lignes) est modeste face au risque |
+| Conditions aux limites spécifiques (`Dirichlet`, `NoSlipWall`, `Sommerfeld`, `Reflective`) | `NoSlipWall` recompute la pression et l'énergie à partir de la mirror de la vitesse, ce qui est intrinsèquement Euler. `Sommerfeld` utilise les invariants de Riemann, idem. `Dirichlet` côté advection accepte une valeur scalaire arbitraire en inflow, sémantique différente |
+| Solveurs Riemann, reconstructions WENO/MUSCL char-flux, viscous flux, sources (gravity, Lorentz, Hall) | Tous intrinsèquement Euler : manipulent `ConservedState2D`, font de l'algèbre de Roe ou de Jacobien, utilisent les variables caractéristiques |
+| Schémas advection (`upwind`, `lax_friedrichs`, `lax_wendroff`, `godunov`, MUSCL rotating, WENO5 rotating) | Spécifiques au cas scalaire |
 
-Ce périmètre est révisable au cas par cas si une duplication non
-prévue apparaît dans un solveur futur.
+Tout ce qui est listé dans la section 2 du layout est **dans `pde_core`** :
+mesh, BC géométriques, AMR primitives, hierarchy, flux register, ghost
+fill, regrid (toutes les variantes), clustering. Le périmètre est
+révisable si une duplication non prévue apparaît dans un solveur futur.
 
 ## 7. CI
 

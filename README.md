@@ -30,19 +30,38 @@ casser côté API.
 
 ## Modules
 
+### Coeur et primitives mesh
+
 | Module | En-tête | Rôle |
 |---|---|---|
 | **types** | [`pde_core/core/types.hpp`](include/pde_core/core/types.hpp) | `Real` (double, surchargeable via `PDE_CORE_USE_FLOAT`), `Index` (`std::ptrdiff_t` signé) |
 | **openmp** | [`pde_core/core/openmp.hpp`](include/pde_core/core/openmp.hpp) | Macros `PDE_OMP_PARALLEL_FOR` / `PDE_OMP_CRITICAL`, neutralisées hors OpenMP |
-| **cell_traits** | [`pde_core/core/cell_traits.hpp`](include/pde_core/core/cell_traits.hpp) | `CellTraits<Cell>::zero()` qui détecte `Cell::Zero()` par SFINAE (Eigen) ou retombe sur value-init |
+| **cell_traits** | [`pde_core/core/cell_traits.hpp`](include/pde_core/core/cell_traits.hpp) | `CellTraits<Cell>::zero()` qui détecte `Cell::Zero()` par SFINAE, accesseur composante `cell_at(c, k)`, et `kahan_add<Cell>` componentwise |
 | **Domain1D / Domain2D** | [`pde_core/mesh/domain*.hpp`](include/pde_core/mesh/) | Grilles uniformes cell-centered, accesseurs `dx()`, `x_cell(i)` |
 | **Field1D / Field2D** | [`pde_core/mesh/field*.hpp`](include/pde_core/mesh/) | Champs cell-centered AoS avec ghost cells, templated `<Cell>`, accès `U(i, j)` signé |
-| **Box1D / Box2D** | [`pde_core/amr/box*.hpp`](include/pde_core/amr/) | Rectangles d'index dans l'espace de raffinement, ratio fixé à 2 |
-| **MeshBlock1D / MeshBlock2D** | [`pde_core/amr/mesh_block*.hpp`](include/pde_core/amr/) | Box + Field, unité de travail à la Athena++, templated `<Cell>` |
-| **clustering2d** | [`pde_core/amr/clustering2d.hpp`](include/pde_core/amr/clustering2d.hpp) | Algorithme de Berger-Rigoutsos (1991) qui couvre les cellules marquées par des rectangles |
 
-Le détail de chaque algorithme et les conventions d'indexation sont
-documentés dans [`docs/ALGORITHMS.md`](docs/ALGORITHMS.md) et
+### Conditions aux limites communes
+
+| Module | En-tête | Rôle |
+|---|---|---|
+| **PeriodicBC1D / 2D** | [`pde_core/bc/periodic*.hpp`](include/pde_core/bc/) | BC périodique avec corner pass pour les 4 coins en 2D |
+| **OutflowBC1D / 2D** | [`pde_core/bc/outflow*.hpp`](include/pde_core/bc/) | Extrapolation zero-gradient transmissive |
+
+### AMR block-structuré
+
+| Module | En-tête | Rôle |
+|---|---|---|
+| **Box1D / Box2D** | [`pde_core/amr/box*.hpp`](include/pde_core/amr/) | Rectangles d'index dans l'espace de raffinement, ratio fixé à 2 |
+| **MeshBlock1D / 2D** | [`pde_core/amr/mesh_block*.hpp`](include/pde_core/amr/) | Box + Field, unité de travail à la Athena++, templated `<Cell>` |
+| **MeshHierarchy1D / 2D** | [`pde_core/amr/mesh_hierarchy*.hpp`](include/pde_core/amr/) | Hiérarchie multi-niveau (jusqu'à 8) + multi-patch (deque pour stabilité des références), API héritée à 2 niveaux conservée pour la rétrocompat |
+| **FluxRegister1D / 2D** | [`pde_core/amr/flux_register*.hpp`](include/pde_core/amr/) | Bookkeeping du refluxing Berger-Colella, somme Kahan-compensée pour stabilité bit-à-bit cross-plateforme, variantes weighted SSPRK3, per-thread accumulators avec merge |
+| **clustering2d** | [`pde_core/amr/clustering2d.hpp`](include/pde_core/amr/clustering2d.hpp) | Algorithme de Berger-Rigoutsos (1991) qui couvre les cellules marquées par des rectangles |
+| **ghost_fill2d** | [`pde_core/amr/ghost_fill2d.hpp`](include/pde_core/amr/ghost_fill2d.hpp) | Remplissage des ghost cells multi-patch : parent avec interpolation temporelle + override sibling pour les voisins de même niveau |
+| **regrid1d / 2d** | [`pde_core/amr/regrid*.hpp`](include/pde_core/amr/) | Régénération du patch fin autour des cellules marquées, variantes single-block, multi-niveau (proper nesting), et multi-patch (via clustering) |
+
+Le détail de chaque algorithme, les conventions d'indexation et les
+références bibliographiques sont dans
+[`docs/ALGORITHMS.md`](docs/ALGORITHMS.md) et
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Utilisation depuis un solveur consommateur
