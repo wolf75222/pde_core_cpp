@@ -64,6 +64,19 @@ références bibliographiques sont dans
 [`docs/ALGORITHMS.md`](docs/ALGORITHMS.md) et
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+## Écosystème
+
+`pde_core_cpp` est l'une de quatre bibliothèques C++20 qui forment l'écosystème de solveurs PDE de ce stage :
+
+| Repo | Rôle | Dépend de |
+|---|---|---|
+| [`poisson_cpp`](https://github.com/wolf75222/poisson_cpp) | Solveurs Poisson (Thomas, SOR, CG, DST spectral, AMR + multigrille) | indépendant |
+| **`pde_core_cpp`** (ce dépôt) | Infrastructure C++ partagée entre les solveurs hyperboliques : mesh, fields templés `<Cell>`, AMR primitives, clustering Berger-Rigoutsos, BC périodique/outflow | indépendant |
+| [`advection_cpp`](https://github.com/wolf75222/advection_cpp) | Advection scalaire + Burgers + advection rotative (MUSCL, WENO5) + Chorin NS incompressible (opt-in) | `pde_core_cpp`, `poisson_cpp` (opt-in) |
+| [`euler_cpp`](https://github.com/wolf75222/euler_cpp) | Euler 2D compressible + viscous NS (no-slip walls) + sources plasma (Lorentz, Hall) + Euler-Poisson AMR self-gravity | `pde_core_cpp`, `poisson_cpp` (opt-in) |
+
+`pde_core_cpp` ne dépend de rien et est tirée par les deux solveurs hyperboliques via `FetchContent`. La séparation a été motivée par un audit qui a mesuré ~2000 lignes d'infrastructure dupliquées entre `advection_cpp` et `euler_cpp` : ce dépôt héberge la version canonique des briques type-agnostiques.
+
 ## Utilisation depuis un solveur consommateur
 
 ```cmake
